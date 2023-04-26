@@ -1,0 +1,15 @@
+﻿@{
+   
+}
+
+<div class="text-center">
+<h1 class="display-4">Kafka AdminClient Functionalities</h1>
+@using (Html.BeginForm("Admin", "Home"))
+  {
+    <p>
+        @Html.ActionLink("Delete Topic", "DeleteTopic", "Home", htmlAttributes: new {@class = "btn btn-danger"})
+        @Html.ActionLink("Create Topic", "CreateTopic", "Home", htmlAttributes: new {@class = "btn btn-secondary"})
+    </p>
+    <p>@ViewBag.Message</p>
+  }
+</div>
