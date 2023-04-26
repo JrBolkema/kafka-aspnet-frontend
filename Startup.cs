@@ -26,7 +26,7 @@ namespace kafka_aspnet_frontend
         {
             services.AddControllersWithViews();
 
-            // TODO: map configuration file
+            services.Configure<KafkaConfigModel>(Configuration.GetSection("KafkaConfig"));
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

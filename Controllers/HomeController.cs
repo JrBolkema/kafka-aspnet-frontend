@@ -6,7 +6,11 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using kafka_aspnet_frontend.Models;
-//using Confluent.Kafka.Admin;
+
+using Confluent.Kafka;
+using Newtonsoft.Json;
+using Microsoft.Extensions.Options;
+using Confluent.Kafka.Admin;
 // add dependencies
 
 namespace kafka_aspnet_frontend.Controllers
@@ -15,11 +19,12 @@ namespace kafka_aspnet_frontend.Controllers
     {
         private readonly ILogger<HomeController> _logger;
 
-        // TODO: appsettings/dependency injection
-
-        public HomeController(ILogger<HomeController> logger)
+        private readonly IOptions<KafkaConfigModel> _appSettings;
+        public HomeController(ILogger<HomeController> logger,
+            IOptions<KafkaConfigModel> appSettings)
         {
             _logger = logger;
+            _appSettings = appSettings;
         }
 
         public IActionResult Index()
@@ -35,21 +40,59 @@ namespace kafka_aspnet_frontend.Controllers
         [HttpPost]
         public IActionResult Register(UserRegistrationModel model)
         {
-            // TODO: client config - hard-coded
 
-            // TODO: client config with appsettings/dependency injection
+            ClientConfig clientConfig = GetKafkaConfig();
 
-            // TODO: Register logic            
+            string topicName = "user-registration";
+            string key = Guid.NewGuid().ToString();
+            model.UserId = key;
+            string message = JsonConvert.SerializeObject(model);
+            Produce(topicName, model.UserId, message, clientConfig);         
 
             ViewBag.Message = "User registration request is sent to the server.";
             return View(model);
         }
 
-        // TODO: GetKafkaConfig method
+        ClientConfig GetKafkaConfig()
+        {
+            ClientConfig clientConfig = new ClientConfig();
+            clientConfig.BootstrapServers = _appSettings.Value.BootstrapServers;
+            clientConfig.SecurityProtocol = SecurityProtocol.SaslSsl;
+            clientConfig.SaslMechanism = SaslMechanism.Plain;
+            clientConfig.SaslUsername = _appSettings.Value.SaslUsername;
+            clientConfig.SaslPassword = _appSettings.Value.SaslPassword;
+            clientConfig.SslCaLocation = _appSettings.Value.SslCaLocation;
+            return clientConfig;
+        }
+                
+        void deliveryHandler(DeliveryReport<string, string> deliveryReport)
+        {
+            if (deliveryReport.Error.Code == ErrorCode.NoError)
+            {
+                Debug.WriteLine($"\n* Message delivered to:({deliveryReport.TopicPartitionOffset}) with these details:");
+                Debug.WriteLine($"-- Key: {deliveryReport.Key},\n-- Timestamp:{deliveryReport.Timestamp.UnixTimestampMs}");
+            }
+            else
+            {
+                Debug.WriteLine($"Failed to deliver message with error:{deliveryReport.Error.Reason}");
+            }
+        }
 
-        // TODO: deliveryHandler method
-
-        // TODO: Produce method
+        void Produce(string topicName, string key, string value, ClientConfig config)
+        {
+            using (IProducer<string,string> producer = new ProducerBuilder<string, string>(config).Build())
+            {
+                double flushTimeSec = 7.0;
+                Message<string, string> message = new Message<string, string> { Key= key, Value = value };
+                producer.Produce(topicName, message, deliveryHandler);
+                Debug.WriteLine($"Produced/published message with key:{message.Key} and value: {message.Value}");
+                var queueSize = producer.Flush(TimeSpan.FromSeconds(flushTimeSec));
+                if (queueSize > 0)
+                {
+                    Debug.WriteLine($"WARNING: Producer event queue has not beenfully flushed after {flushTimeSec} seconds; {queueSize} eventspending.");
+                }
+            }
+        }
 
 		public ActionResult Admin()
 		{
